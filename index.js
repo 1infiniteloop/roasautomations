@@ -11,6 +11,7 @@ const {
     throwError,
     defaultIfEmpty,
     tap,
+    catchError,
 } = require("rxjs");
 const {
     identity,
@@ -40,16 +41,20 @@ const {
 } = require("ramda");
 const { isEmpty, toNumber, size, isUndefined, isNull, flattenDeep } = require("lodash");
 const { db } = require("./database");
+// const { db } = require("../database");
 const moment = require("moment");
 const { formatInTimeZone } = require("date-fns-tz");
 const { pipeLog, get_dates_range_array, lomap, loreduce, lokeyby, losortby, logroupby, lofilter, loorderby } = require("helpers");
 var pluralize = require("pluralize");
 const { get, all, mod, matching } = require("shades");
 const { Account } = require("roasfacebook");
+// const { Account } = require("./facebook");
 
 let numOrZero = (num) => {
     return num >= 0 && num !== Infinity ? num : 0;
 };
+
+const queryDocs = (snapshot) => snapshot.docs.map((doc) => doc.data());
 
 const Rule = {
     utilities: {
@@ -114,7 +119,6 @@ const Rule = {
             );
         },
     },
-
     logs: {
         save: ({ logs, rule_id }) => {
             return rxof(logs).pipe(
@@ -237,12 +241,28 @@ const Rule = {
                 return payload;
             },
         },
-        execute: (account_id, access_token, action) => {
-            return from(Account({ account_id, access_token }).post(action)).pipe(
+        execute: (user_id, account_id, action) => {
+            const func_name = "Rule:actions:execute";
+            console.log(func_name);
+
+            return from(
+                getDocs(query(collectionGroup(db, "integrations"), where("user_id", "==", user_id), where("account_name", "==", "facebook")))
+            ).pipe(
+                rxmap(queryDocs),
+                rxmap(loorderby(["created_at"], ["asc"])),
+                rxmap(pipeLog),
                 rxmap(head),
-                defaultIfEmpty({}),
-                rxmap(get("data")),
-                defaultIfEmpty({})
+                concatMap((fb_account_credentials) => {
+                    if (!fb_account_credentials) return rxof([]);
+                    let { access_token = "" } = fb_account_credentials;
+
+                    return from(Account({ account_id, access_token }).post(action)).pipe(
+                        rxmap(head),
+                        defaultIfEmpty({}),
+                        rxmap(get("data")),
+                        defaultIfEmpty({})
+                    );
+                })
             );
         },
     },
@@ -258,7 +278,7 @@ const Rule = {
             let expressions = Rule.expressions.get(rule);
 
             let { user_id, assets, ...rest } = rule;
-            let action = Rule.action.get(rule);
+            // let action = Rule.action.get(rule);
             let scope = Rule.scope.get(rule);
             let selected_assets_ids = Rule.assets.selected.ids(rule);
 
@@ -487,6 +507,8 @@ const Rule = {
             let func_name = "Rule:expression:validate";
             console.log(`${func_name}`);
 
+            console.log(expression);
+
             let dates = Rule.expression.dates_array(expression);
 
             return from(dates).pipe(
@@ -508,6 +530,10 @@ const Rule = {
                     expression_id: expression.id,
                     condition_id: expression.condition_id,
                 })),
+                catchError((error) => {
+                    console.log("caughterror1");
+                    return rxof({});
+                }),
                 rxmap(of),
                 rxreduce((prev, curr) => [...prev, ...curr])
             );
@@ -558,7 +584,11 @@ const Rules = {
 
     get: {
         active: () => {
-            let active_rules_query = query(collection(db, "rules"), where("status", "==", "active"));
+            let active_rules_query = query(
+                collection(db, "rules"),
+                where("status", "==", "active"),
+                where("user_id", "==", "aobouNIIRJMSjsDs2dIXAwEKmiY2")
+            );
             return from(getDocs(active_rules_query)).pipe(rxmap((snapshot) => snapshot.docs.map((doc) => doc.data())));
         },
     },
