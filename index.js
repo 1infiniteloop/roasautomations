@@ -128,12 +128,12 @@ const Rule = {
                 rxmap(values),
                 concatMap(identity),
                 concatMap((log) => {
-                    console.log(log);
-                    let payload = { ...log, created_at: moment().format("x") };
+                    let payload = { ...log, created_at: Number(moment().format("x")) };
+                    // payload = pipe(mod('validation', all, 'asset_value')(() => ''))(payload)
 
-                    return from(addDoc(collection(db, "rules_logs"), clean(payload))).pipe(
+                    return from(addDoc(collection(db, "rules_logs"), payload)).pipe(
                         rxmap(() => console.log(`saved rule ${rule_id} log ${log.asset_id}`)),
-                        rxmap(() => log)
+                        rxmap(() => console.log(payload))
                     );
                 }),
                 rxmap(of)
@@ -535,6 +535,14 @@ const Rule = {
 
             let dates = Rule.expression.dates_array(expression);
 
+            const get_asset_value = (expression, asset) => {
+                if (expression.metric.value == "roascustomers") {
+                    return pipe(get(`roassales`))(asset);
+                }
+
+                return pipe(get(`${expression.metric.value}`))(asset);
+            };
+
             return from(dates).pipe(
                 concatMap((date) => Rule.reports.date_stats(date, expression.user_id, expression.scope)),
                 rxreduce((prev, curr) => [...prev, ...curr]),
@@ -544,7 +552,7 @@ const Rule = {
                 concatMap(identity),
                 rxmap((asset) => ({
                     ...asset,
-                    asset_value: pipe(get(`${expression.metric.value}`))(asset),
+                    asset_value: get_asset_value(expression, asset),
                     status: Rule.validate[expression.metric.value](asset, expression.predicate.value, expression.value),
                     predicate: expression.predicate.value,
                     metric: expression.metric.value,
