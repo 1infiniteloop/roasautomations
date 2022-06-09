@@ -44,7 +44,7 @@ const { db } = require("./database");
 // const { db } = require("../database");
 const moment = require("moment");
 const { formatInTimeZone } = require("date-fns-tz");
-const { pipeLog, get_dates_range_array, lomap, loreduce, lokeyby, losortby, logroupby, lofilter, loorderby } = require("helpers");
+const { pipeLog, get_dates_range_array, lomap, loreduce, lokeyby, losortby, logroupby, lofilter, loorderby, clean } = require("helpers");
 var pluralize = require("pluralize");
 const { get, all, mod, matching } = require("shades");
 const { Account } = require("roasfacebook");
@@ -121,11 +121,17 @@ const Rule = {
     },
     logs: {
         save: ({ logs, rule_id }) => {
+            let func_name = "Rule:logs:save";
+            console.log(func_name);
+
             return rxof(logs).pipe(
                 rxmap(values),
                 concatMap(identity),
                 concatMap((log) => {
-                    return from(addDoc(collection(db, "rules_logs"), { ...log, created_at: moment().unix() })).pipe(
+                    console.log(log);
+                    let payload = { ...log, created_at: moment().format("x") };
+
+                    return from(addDoc(collection(db, "rules_logs"), clean(payload))).pipe(
                         rxmap(() => console.log(`saved rule ${rule_id} log ${log.asset_id}`)),
                         rxmap(() => log)
                     );
@@ -275,6 +281,9 @@ const Rule = {
     },
     validate: {
         self: (rule) => {
+            let func_name = "Rule:validate:self";
+            console.log(func_name);
+
             let expressions = Rule.expressions.get(rule);
 
             let { user_id, assets, ...rest } = rule;
@@ -326,6 +335,21 @@ const Rule = {
             if (value == undefined || value == null) return false;
 
             return Rule.predicates[`${predicate}`](Number(asset.roassales), Number(value));
+        },
+
+        roascustomers: (asset, predicate, value) => {
+            let func_name = "Rule:validate:roascustomers";
+            console.log(`${func_name}`);
+
+            if (asset == undefined || asset == null) return false;
+            if (predicate == undefined || predicate == null) return false;
+            if (value == undefined || value == null) return false;
+
+            let result = Rule.predicates[`${predicate}`](Number(asset.roassales), Number(value));
+            console.log(`${func_name}:result`);
+            console.log(result);
+            // console.log(asset);
+            return result;
         },
     },
     reports: {
