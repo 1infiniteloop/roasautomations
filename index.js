@@ -616,11 +616,7 @@ const Rules = {
 
     get: {
         active: () => {
-            let active_rules_query = query(
-                collection(db, "rules"),
-                where("status", "==", "active"),
-                where("user_id", "==", "aobouNIIRJMSjsDs2dIXAwEKmiY2")
-            );
+            let active_rules_query = query(collection(db, "rules"), where("status", "==", "active"));
             return from(getDocs(active_rules_query)).pipe(rxmap((snapshot) => snapshot.docs.map((doc) => doc.data())));
         },
     },
