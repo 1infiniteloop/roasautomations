@@ -54,7 +54,7 @@ let numOrZero = (num) => {
     return num >= 0 && num !== Infinity ? num : 0;
 };
 
-const queryDocs = (snapshot) => snapshot.docs.map((doc) => doc.data());
+const queryDocs = (snapshot) => snapshot.docs.map((doc) => ({ ...doc.data(), doc_id: doc.id }));
 
 const Rule = {
     utilities: {
@@ -105,8 +105,7 @@ const Rule = {
             console.log("update_last_checked");
             let { id: rule_id } = rule;
             let payload = { last_checked: moment().unix() };
-            setDoc(doc(db, "rules", rule_id), payload, { merge: true });
-            return { ...rule, ...payload };
+            return from(setDoc(doc(db, "rules", rule_id), payload, { merge: true })).pipe(rxmap(() => ({ ...rule, ...payload })));
         },
 
         reset_active_checked_at_timestamp: (rule) => {
